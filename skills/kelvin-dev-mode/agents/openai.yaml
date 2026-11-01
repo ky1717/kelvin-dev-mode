@@ -1,0 +1,5 @@
+interface:
+  display_name: "Kelvin Dev Mode"
+  short_description: "Overnight autonomous build run from a ticket queue"
+policy:
+  allow_implicit_invocation: false

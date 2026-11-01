@@ -1,0 +1,5 @@
+interface:
+  display_name: "Kelvin Dev Mode Setup"
+  short_description: "Set up the overnight build run for this repo"
+policy:
+  allow_implicit_invocation: false
