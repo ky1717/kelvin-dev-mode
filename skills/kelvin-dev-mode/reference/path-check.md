@@ -59,3 +59,78 @@ def check(worktree, baseline, listed, handled=()):
 # baseline = status_paths(worktree)   # once, after the worktree exists and `install` has finished
 # only_in_list, only_in_tree = check(worktree, baseline, set(returned_paths), handled_forbidden)
 ```
+
+## Git Bash (no Python)
+
+`status_paths` prints the changed paths one per line, sorted in byte order (`LC_ALL=C`, which for UTF-8 is code point order). `check` takes sorted files of paths (the baseline, the returned list, the handled forbidden paths) and prints the two differences.
+
+```bash
+# status_paths <worktree>: the changed paths, one per line, sorted by byte (= code point) order
+status_paths() {
+  local skip=
+  git -C "$1" status --porcelain=v1 -z -uall |
+  while IFS= read -r -d '' rec; do
+    if [ -n "$skip" ]; then printf '%s\n' "$rec"; skip=; continue; fi   # second path of an R or C record
+    printf '%s\n' "${rec:3}"
+    case "${rec:0:2}" in *R*|*C*) skip=1 ;; esac
+  done | LC_ALL=C sort
+}
+
+# check <worktree> <baseline.txt> <listed.txt> <handled.txt>   (all sorted with LC_ALL=C, one path per line)
+check() {
+  local wt=$1 base=$2 listed=$3 handled=$4 t; t=$(mktemp -d)
+  LC_ALL=C comm -23 "$listed" "$handled" > "$t/listed"                 # listed - handled
+  LC_ALL=C comm -23 "$base" "$t/listed" > "$t/baseline_only"           # baseline - listed
+  status_paths "$wt" | LC_ALL=C comm -23 - "$t/baseline_only" > "$t/current"
+  echo "only in list:";  LC_ALL=C comm -23 "$t/listed" "$t/current"
+  echo "only in tree:";  LC_ALL=C comm -13 "$t/listed" "$t/current"
+  rm -rf "$t"
+}
+```
+
+Run on 2026-11-03 in Git Bash on Windows, in a toy repository with a new file, a file name with a space, a file name in Chinese, a rename made by `git mv` (the record is `R  moved.txt` and then `keep.txt`: new path first), and a rename made by `mv` (` D old.txt` plus `?? renamed.txt`). The seven paths came out as expected; `check` reported nothing when the list was complete, reported a listed path that does not exist, passed it once it was handled, reported an unnamed path, and ignored a baseline path. Not tested: other operating systems, an ignored file in the returned list, a non-UTF-8 console.
+
+## PowerShell 5.1 (no Python)
+
+Read the git output as bytes, so the pipeline does not re-encode it (the claim that the pipeline re-encodes non-ASCII output was not tested here; the snippet avoids the question). `Get-StatusPaths` returns the paths in ordinal order; `Compare-Paths` returns the two differences.
+
+```powershell
+# Get-StatusPaths <worktree>: the changed paths as a sorted string array (ordinal = code point order)
+function Get-StatusPaths([string]$Worktree) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = 'git'
+    $psi.Arguments = '-C "' + $Worktree + '" status --porcelain=v1 -z -uall'
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $ms = New-Object System.IO.MemoryStream
+    $proc.StandardOutput.BaseStream.CopyTo($ms)      # raw bytes: no re-encoding by the pipeline
+    $proc.WaitForExit()
+    $records = [System.Text.Encoding]::UTF8.GetString($ms.ToArray()).Split([char]0)
+    $paths = New-Object 'System.Collections.Generic.HashSet[string]'
+    $i = 0
+    while ($i -lt $records.Length) {
+        $rec = $records[$i]; $i++
+        if ($rec.Length -lt 4) { continue }
+        [void]$paths.Add($rec.Substring(3))
+        $xy = $rec.Substring(0, 2)
+        if ($xy.Contains('R') -or $xy.Contains('C')) { [void]$paths.Add($records[$i]); $i++ }   # second path: the old name
+    }
+    $sorted = New-Object 'System.Collections.Generic.List[string]' (, $paths)
+    $sorted.Sort([System.StringComparer]::Ordinal)
+    return $sorted.ToArray()
+}
+
+# Compare-Paths <worktree> <baseline> <listed> <handled>: returns the two differences
+function Compare-Paths([string]$Worktree, [string[]]$Baseline, [string[]]$Listed, [string[]]$Handled) {
+    $listed = New-Object 'System.Collections.Generic.HashSet[string]' (, ([string[]]($Listed | Where-Object { $Handled -notcontains $_ })))
+    $baselineOnly = $Baseline | Where-Object { -not $listed.Contains($_) }
+    $current = New-Object 'System.Collections.Generic.HashSet[string]' (, ([string[]](Get-StatusPaths $Worktree | Where-Object { $baselineOnly -notcontains $_ })))
+    [pscustomobject]@{
+        OnlyInList = @($listed | Where-Object { -not $current.Contains($_) } | Sort-Object { $_ } )
+        OnlyInTree = @($current | Where-Object { -not $listed.Contains($_) } | Sort-Object { $_ })
+    }
+}
+```
+
+Run on 2026-11-03 with Windows PowerShell 5.1 (5.1.26100) in the same toy repository and with the same five checks; the Chinese file name decoded correctly (U+4E2D U+6587). The two differences are sorted for display with the default `Sort-Object`, which is not ordinal. Not tested: a non-UTF-8 console, an ignored file in the returned list, PowerShell 7.

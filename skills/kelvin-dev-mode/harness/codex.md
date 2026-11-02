@@ -57,6 +57,47 @@ Source: two probe tasks created through a bridge and two created by hand in the 
 - Consequence for this skill: workers do not commit; the orchestrator does (`reference/contracts.md`, The orchestrator's commit).
 - Not measured: whether tests that write temporary files also need an elevated-permission request. One session reported it; the cause was not isolated.
 
+## Observed (one overnight run, Codex as worker, 2026-11-01)
+
+Source: one overnight run in a real project; the bridge's receipt timestamps and the CI and deploy queries. This is one run's observation, not a guarantee: CI and deploy times depend on the project. Use: starting points for the wake-up interval while the orchestrator waits for a reply and while it waits for CI (`SKILL.md`, Tick).
+
+- An implementation reply took about 1.5 to 5 minutes (1.5 minutes for one first reply, about 4.7 minutes for another).
+- A review took about 1 minute (two cases).
+- One CI round took about 9 to 12 minutes.
+- The deploy to staging was still running after 11 to 14 minutes in at least some observations.
+
+## Command-line route (`codex exec`)
+
+Tested on 2026-11-01 on Windows with codex-cli 0.166.0-alpha.5.1; one test, not a guarantee.
+
+- Call: `codex exec --json --skip-git-repo-check --model <id> -c model_reasoning_effort="<level>" -s workspace-write -c approval_policy="never" -C <dir> -` (the prompt arrives on standard input through the final `-`). Take `<id>` from the local `~/.codex/models_cache.json`, not from documents that name older models.
+- `codex exec resume <thread id> --json ... -` returns to the same session, which remembered its earlier context; the QUESTION-and-answer flow works through it.
+- Three workers in parallel finished in about 22 seconds, and memory peaked at about 1.9 GB in total. One minimal worker used about 0.6 GB. Codex Desktop alone used about 5.6 GB. This is one observation; summed working sets count shared memory more than once, so only the order of magnitude counts.
+- The GitHub connector still worked (a ticket was read) while the Codex Desktop process was completely stopped. Putting `--disable apps --disable plugins` in the start arguments removes the connector.
+- A command-line session does not appear in the Codex Desktop task list.
+- Closing the Codex Desktop window does not stop its processes (110 stayed until they were killed).
+
+## Writing `.git` from a Codex worker (command-line route, 2026-11-01, Windows)
+
+Setup: `-s workspace-write` with `approval_policy="never"`.
+
+| Layout | `git add` |
+|---|---|
+| a worktree outside the main repository | fails: `Unable to create '.../index.lock': Permission denied` |
+| a worktree inside the main repository | fails with the same error |
+| an independent clone (its own `.git` is inside the workspace) | fails with the same error |
+
+- With the worktree's git directory plus the shared `objects`, `refs` and `logs` added as writable roots, `git add` and `git commit` succeed; the worker can then change shared branches and object data, so this is not recommended.
+- `-s danger-full-access` succeeds; not recommended.
+- Cause: git keeps a worktree's index under the main repository's `.git/worktrees/<name>/`, which the Codex sandbox protects. This is why workers do not commit (`reference/contracts.md`, The orchestrator's commit).
+- A Windows gotcha: under `-s workspace-write`, even creating a file in a directory under an 8.3 short path (a name containing `~1`) was refused; the same work under a normal long path succeeded.
+
+## Windows: `bash` on PATH (checked 2026-11-01)
+
+- Typing `bash` in PowerShell or cmd runs `C:/Windows/System32/bash.exe`, the WSL launcher. When the machine's only WSL distribution is the internal one that Docker Desktop creates, that distribution has no `/bin/bash`, and the call fails with `execvpe(/bin/bash) failed: No such file or directory`.
+- Git Bash (`C:/Program Files/Git/bin/bash.exe`) works, and git hooks run in it, so they are not affected.
+- Write the full path to `bash` in worker prompts and project scripts; leave the user's PATH alone.
+
 ## Still Codex's own statement, untested
 
 These come from a capability probe in which Codex described itself.

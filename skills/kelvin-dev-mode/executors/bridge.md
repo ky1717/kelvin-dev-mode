@@ -19,7 +19,7 @@ If a bridge lacks one of the five required actions, the run refuses to start and
 
 ## Preflight
 
-The project must be saved in the worker application (starting a worker accepts saved projects only). The preflight worker probe (`SKILL.md`, preflight step 2) closes its worker with *close worker*; a bridge without it: see Checks and limits, Closing.
+The project must be saved in the worker application (starting a worker accepts saved projects only). The preflight worker probe (`SKILL.md`, preflight step 2) closes its worker with *close worker*, and the probe file is defined in `reference/contracts.md`; a bridge without it: see Checks and limits, Closing.
 
 ## Workers
 

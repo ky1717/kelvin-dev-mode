@@ -56,6 +56,14 @@ After each of the implementer's turns that ends in changes (the first one and ev
 
 The reviewed head is the SHA that the last review returning green on both axes covered. The final head is the SHA after Prepare has merged `origin/<default>` and pushed. The `patch-id` comparison uses these two heads. When it differs, the reviewers' worktrees move to the final head and the re-check is done there.
 
+## The preflight probe file
+
+The probe worker writes `probe.txt` with the single line `probe` in the probe worktree and replies when done. The orchestrator checks that the file exists, stages and commits it (`SKILL.md`, preflight step 2).
+
+## A rule that changes during a run
+
+A PR opened under the rule in force at that time keeps that rule. Before its merge gate, bring it up to the current rule's pre-merge checks: Prepare, the `patch-id` comparison, and a `ready to merge` comment with the full hash. Commits already made are not redone and get no path check. One ledger comment says that the PR keeps the earlier rule and which checks were added.
+
 ## Evidence only CI can give
 
 An acceptance item that only CI can prove (for example "20 CI runs", cache hit and miss logs, run numbers) is produced by the orchestrator, not the implementer: open a Draft PR that changes workflows only and triggers the runs, link the runs in the body of the PR under review, then close the Draft PR and delete its branch. The Draft PR never merges. It is the one exception to `forbidden-files` (it may edit a workflow), and only for the orchestrator and only for evidence that CI alone can give. A claim that a change removes a flaky test needs a control run on the unfixed code, and the control must be able to go red. If it cannot, the PR says the evidence cannot tell fixed from unfixed and uses `Refs #N`, not `Closes #N`.
