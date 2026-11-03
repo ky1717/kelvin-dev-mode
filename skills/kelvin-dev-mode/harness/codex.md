@@ -107,7 +107,7 @@ Source: tests of the bridge's tools on one machine, 2026-11-03; the whole dev-mo
 | Action | Tool |
 |---|---|
 | start worker | `start_claude_session(cwd, name, firstMessage, disallowedTools?, credentialMode?)`: returns `sessionId`, `pid`, process start time, `name`, `cwd`. `credentialMode` is `none` (the default) or `inherit`. |
-| send task | `send_to_claude_session(target, message, expectedCwd?, expectedTaskId?, messageId?, waitFor?, waitSec?)`. `messageId` must be a UUID; `waitFor` is `receipt` (the default, inbox only) or `reply`. |
+| send task | `send_to_claude_session(target, message, expectedCwd?, expectedTaskId?, messageId?, waitFor?, waitSec?)`. `messageId` must be a UUID; `waitFor` is `receipt` (the default, inbox only) or `reply`. `expectedCwd` is the session's own directory (the repository root), not the worktree. |
 | read result | `read_bridge_message(messageId, waitSec?)`, `list_unread_results(limit?, after?)`, then `acknowledge_bridge_message(messageId, phase="reply_received")`; `read_claude_delivery(msgId)` reads a receipt. |
 | query status | `list_claude_sessions(includeDead?, expectedCwd?)`; `read_claude_transcript(target, limit?)` reads without sending. |
 | close worker | `close_claude_session(sessionId or pid)`: closes only sessions the calling thread started, forces the close if the session hangs, returns whether the process exited and `structuredContent.tabCloseRequested`, refuses a reused pid. |

@@ -39,7 +39,7 @@ You need a GitHub repository, `gh` installed and logged in, and a label that mar
 | Claude Code | One overnight run in one project, with the `bridge` executor (a Claude orchestrator, workers in Codex), under an earlier version of this skill. |
 | Claude Code, `subagent` executor | Three small scenarios in one private toy repository, in one continuous test: with `merge: pr-only`; with `merge: auto` and a CI `verify` check (three tickets merged); with no role skills (the contract only). |
 | Codex | The orchestrator ran once in a toy repository: three tickets, about ten minutes, interactive, Full Access, no wake-up tested; running unattended is not verified. `skills/kelvin-dev-mode/harness/codex.md` separates what was observed from what is still Codex's own statement. |
-| Codex, `bridge` executor with Claude workers | The bridge's tools (start, send, read, list, close) were tested on one machine on 2026-11-03; the whole dev-mode flow has not run. |
+| Codex, `bridge` executor with Claude workers | The bridge's tools were tested on one machine; one real preflight in a practice repository (2026-11-03: the probe worker wrote a file, the orchestrator committed it, the session was closed) completed, and it corrected one rule (the session's directory). The whole dev-mode flow has not run. |
 | Any other harness | Not run. |
 
 Everything below describes intended behavior until a run confirms it.
@@ -126,7 +126,7 @@ The `list-tickets` format (one line per ticket: number, `READY` or `BLOCKED`, ti
 
 ## Terms
 
-- **Ledger**: one GitHub issue, found by the label `dev-mode-ledger` (create the label first if your repo lacks it). Every state change is a comment. The states, the run-level comments, the `ready to merge` proof values and the rule for a restart after a morning report: `skills/kelvin-dev-mode/SKILL.md` (Ledger). Any script that parses the ledger has to recognise all of them.
+- **Ledger**: one GitHub issue, found by the label `dev-mode-ledger` (create the label first if your repo lacks it). Every state change is a comment. The states, the run-level comments, the `ready to merge` proof values and the rule for a restart after a morning report: `skills/kelvin-dev-mode/reference/ledger.md`. Any script that parses the ledger has to recognise all of them.
 - **Tick**: one pass of the run: read the ledger, read unread results, check each worker for progress, act, then schedule the next wake-up. Delays: about 1200 s as a long fallback while background tasks run, about 600 s while a worker reply is awaited; starting guesses, not measured values.
 - **Evidence only CI can give**: `skills/kelvin-dev-mode/reference/contracts.md`.
 - **Spec**: the tickets plus whatever specification your project keeps (docs, ADRs, a glossary). The run never changes it to get out of a problem.

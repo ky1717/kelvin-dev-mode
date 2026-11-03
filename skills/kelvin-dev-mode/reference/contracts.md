@@ -58,7 +58,7 @@ The reviewed head is the SHA that the last review returning green on both axes c
 
 ## The preflight probe file
 
-The probe worker writes `probe.txt` with the single line `probe` in the probe worktree and replies when done. The orchestrator checks that the file exists, stages and commits it (`SKILL.md`, preflight step 2).
+The probe worker writes `probe.txt` with the single line `probe` in the probe worktree and replies when done. The orchestrator checks that the file exists, stages and commits it (`SKILL.md`, preflight step 2). Send the probe worker's commands one at a time. Checking the git remote or `gh auth` is a preflight check of the orchestrator itself (`SKILL.md`, preflight step 2), not a task for the worker.
 
 ## A rule that changes during a run
 
