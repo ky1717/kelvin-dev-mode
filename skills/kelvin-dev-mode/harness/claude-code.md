@@ -16,6 +16,12 @@ Read when the orchestrator is a Claude Code session (or a Claude Code worker is 
 
 A skill that can only be started by a user (`disable-model-invocation: true`, as Matt's `implement` has) is a user-only skill. A sandbox run of the `subagent` executor found the implementer, whose prompt the orchestrator wrote, unable to start it. Such a role follows the three steps in `reference/contracts.md`. Whether a Claude sub-agent can read a user-only skill's file and follow it was not tested (it waits for a sandbox run); the sandbox run that found the limit used the contract only. The `bridge` executor, whose workers receive the call as a user message, did not hit this in the one overnight run.
 
+## Bridge tools for Codex workers
+
+Source: the tool descriptions of the bridge used in testing, read on 2026-11-01. These are interface facts, not measurements; the earlier overnight run used this direction (a Claude orchestrator with Codex workers) under an earlier version of this skill, and the whole flow of the current version has not run overnight.
+
+A Claude orchestrator reaches Codex workers through the bridge used in testing (`executors/bridge.md` has the protocol). Per action: start worker, `start_codex_thread`; send task, `send_to_codex_thread`; read result, `read_bridge_message`, `list_unread_results` and `acknowledge_bridge_message` (`read_codex_delivery` reads a receipt); query status, `list_codex_threads` and `read_codex_thread`. There is no close action: `interrupt_codex_turn` ends one turn, and `stop_codex_app_server` ends every worker, so it is not one worker's close.
+
 Command-line workers on Windows (tested on 2026-11-01 with Claude Code 2.1.316; one test). A worker can commit by itself only when its allowlist names both tool families: with an ordinary profile and a git allowlist, write `Bash(git add:*)` and `PowerShell(git add:*)` (the same for each git command); writing one family is refused. A launcher preset that starts with `--restricted` disables every shell, so its worker cannot run git. With `-p --permission-mode dontAsk`, `Write` must be in the allowlist. This skill still has the orchestrator commit (`reference/contracts.md`, The orchestrator's commit); these lines are facts, not a rule.
 
 Without a sandbox, a deny list such as `--disallowedTools "Bash(git push:*)"` blocks only the literal command: `git -C . push` gets around it (tested in a toy repository against a local bare remote, where the remote's refs showed the push). The orchestrator's check is therefore the authority.

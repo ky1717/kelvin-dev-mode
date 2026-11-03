@@ -28,7 +28,7 @@ The example was run with `gh` 2.103.2; other versions are untested, so check tha
 
 This is the quality baseline for the implementer, whether or not a skill is named.
 
-- Input: a ticket number. The working directory is a prepared git worktree. How the ticket is read is the executor's business: a bridge worker uses its GitHub connector, a sub-agent uses `gh`.
+- Input: a ticket number. The working directory is a prepared git worktree. How the ticket is read is the executor's business: a bridge worker uses the read tool its application provides (`executors/bridge.md`, Reading tickets), a sub-agent uses `gh`.
 - Before starting: read the ticket and state its title; read the project's `GLOSSARY.md`, ADRs, coding-standards documents and the like where they exist, and skip them where they do not. If a skill named `tdd` is installed and the worker can call it, call it for the work below; otherwise follow the next list.
 - Must (when working from the contract):
   1. Test first, one vertical slice at a time, at the seams the orchestrator names. Write a test that fails and keep its raw failing output; then write the least code that passes. Do not write all the tests first.
@@ -45,8 +45,8 @@ This is the quality baseline for the implementer, whether or not a skill is name
 
 After each of the implementer's turns that ends in changes (the first one and every fix round) the orchestrator commits them. The commit is the hand-over object: reviewers, `patch-id`, `ready to merge` and the PR work from it.
 
-0. When a worktree is created and `install` has finished, record its changed paths once as the baseline (`install` may change a lockfile): `reference/path-check.md`.
-1. First drop from the returned list the forbidden paths that step 2 has already restored or deleted. Then compare the worktree's changed paths with the list as `reference/path-check.md` says. A path in only one of them goes back to the implementer as one question. This mechanical question is not a fix round and does not count toward the 3-question limit.
+0. When a worktree is created and `install` has finished, record its changed paths once as the baseline (`install` may change a lockfile): `reference/path-check.md`. Record `git -C "<worktree>" rev-parse HEAD` as well, and again after each commit.
+1. First check that `git -C "<worktree>" rev-parse HEAD` equals the recorded value; a different value means the worker committed by itself, which is an unexpected change (`executors/bridge.md`, Workers without a sandbox). Then drop from the returned list the forbidden paths that step 2 has already restored or deleted. Then compare the worktree's changed paths with the list as `reference/path-check.md` says. A path in only one of them goes back to the implementer as one question. This mechanical question is not a fix round and does not count toward the 3-question limit.
 2. Stage path by path: `git -C "<worktree>" add -- <path>` for each listed path that does not match `forbidden-files` (in PowerShell 5.1 a path with spaces needs quotes; not tested). A listed forbidden path is not staged, and it is named in the PR and the report; the PR uses `Refs #N`. Undo the worker's change without `git add`: a path that git tracks (`git -C "<worktree>" ls-files --error-unmatch -- <path>` succeeds) is restored with `git -C "<worktree>" restore --worktree -- <path>`; an untracked, newly created path is deleted with `git -C "<worktree>" clean -f -- <path>`; a path that is also in the baseline (for example a lockfile that `install` changed) is left as it is. Restoring or deleting is not editing a forbidden path.
 3. Commit with the message `<ticket title> (#N)` and the machine's configured git identity. A fix round makes a new commit.
 4. When the `pre-commit` hook fails, send its output to the implementer as one fix round; the implementer fixes the files, you clear the index with `git -C "<worktree>" reset`, and repeat steps 1 to 3.

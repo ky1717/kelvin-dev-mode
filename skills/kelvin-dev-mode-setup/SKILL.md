@@ -45,7 +45,7 @@ Show the user the full draft of `docs/agents/dev-mode.md` and of the pointer blo
 Order: the adapter file first, then the pointers, then the labels.
 
 - **Adapter file.** Write only the fields whose value was collected; a field you did not collect is left out, and its default applies (use `dev-mode.md` beside this file as the shape, not as text to copy). Create `docs/agents/` if it is missing. If the file exists, change only the lines of fields this skill owns and leave every other line and all surrounding text as the user wrote it.
-- **A second adapter.** If the project already has an adapter and the user wants another for a different orchestrator (for example Claude orchestrating through a bridge in one, Codex orchestrating with sub-agents in the other), write a new named adapter file, `docs/agents/dev-mode-<name>.md`, and never overwrite the first. List both in the pointer section as `name: path` lines (the first one `default`) and tell the user to start the second with `adapter=<path>`.
+- **A second adapter.** If the project already has an adapter and the user wants another for a different orchestrator (for example Claude orchestrating through a bridge in one, Codex orchestrating with sub-agents or through a bridge in the other), write a new named adapter file, `docs/agents/dev-mode-<name>.md`, and never overwrite the first. List both in the pointer section as `name: path` lines (the first one `default`) and tell the user to start the second with `adapter=<path>`.
 - **Pointer.** Add this section to **every** instruction file that already exists among `AGENTS.md` and `CLAUDE.md` (different harnesses read different files), near the top of the file, not at the end, because a harness may read only the start of a long file:
 
   ```markdown

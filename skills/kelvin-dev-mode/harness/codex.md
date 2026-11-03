@@ -98,6 +98,27 @@ Setup: `-s workspace-write` with `approval_policy="never"`.
 - Git Bash (`C:/Program Files/Git/bin/bash.exe`) works, and git hooks run in it, so they are not affected.
 - Write the full path to `bash` in worker prompts and project scripts; leave the user's PATH alone.
 
+## Codex as orchestrator with the `bridge` executor (Claude workers)
+
+Source: tests of the bridge's tools on one machine, 2026-11-03; the whole dev-mode flow has not run.
+
+- Tools for a Claude worker, per action:
+
+| Action | Tool |
+|---|---|
+| start worker | `start_claude_session(cwd, name, firstMessage, disallowedTools?, credentialMode?)`: returns `sessionId`, `pid`, process start time, `name`, `cwd`. `credentialMode` is `none` (the default) or `inherit`. |
+| send task | `send_to_claude_session(target, message, expectedCwd?, expectedTaskId?, messageId?, waitFor?, waitSec?)`. `messageId` must be a UUID; `waitFor` is `receipt` (the default, inbox only) or `reply`. |
+| read result | `read_bridge_message(messageId, waitSec?)`, `list_unread_results(limit?, after?)`, then `acknowledge_bridge_message(messageId, phase="reply_received")`; `read_claude_delivery(msgId)` reads a receipt. |
+| query status | `list_claude_sessions(includeDead?, expectedCwd?)`; `read_claude_transcript(target, limit?)` reads without sending. |
+| close worker | `close_claude_session(sessionId or pid)`: closes only sessions the calling thread started, forces the close if the session hangs, returns whether the process exited and `structuredContent.tabCloseRequested`, refuses a reused pid. |
+
+- A Claude worker has no interrupt tool: close it directly (`close_claude_session` ends the process by force; its uncommitted changes stay in the worktree).
+- The read-only ticket tool of a Claude worker is named like `mcp__github-ro-<owner>__issue_read` (one per covered owner); the rules for its use are in `executors/bridge.md`, Reading tickets.
+- The orchestrator thread must be one that the operator opened by hand with Full Access: it runs `git worktree add`, staging, commits and pushes, and a thread that a bridge creates is `workspace-write` with a read-only main `.git` (the section on bridge-created and hand-created tasks, above).
+- The orchestrator keeps its git and `gh` credentials; its workers start with the credential mode `none`.
+- A Codex thread starts Claude sessions only after the operator has asked for it in that thread. That is a written rule for the Codex orchestrator, not a check by the bridge.
+- When a worker has delivered and the orchestrator has checked the result, close the session with `close_claude_session`; an idle session still holds memory. Read `structuredContent.tabCloseRequested` in the reply: `false`, or a worker that crashed, leaves the terminal tab open for the operator to close by hand, and the morning report lists such a tab.
+
 ## Still Codex's own statement, untested
 
 These come from a capability probe in which Codex described itself.

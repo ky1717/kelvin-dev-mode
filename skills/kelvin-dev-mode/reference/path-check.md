@@ -4,6 +4,8 @@ The orchestrator's comparison of a worktree's changed paths with the implementer
 
 ## Rules
 
+0. Before the comparison, `HEAD` must equal the value recorded before the worker's turn (`contracts.md`, step 1); otherwise stop: the worker committed by itself.
+
 1. Read the worktree with `git -C "<worktree>" status --porcelain=v1 -z -uall` and split the output at NUL. Each record is `XY <path>`. When X or Y is `R` or `C`, the next record is a second path: under `-z` the order is the new path, then the old path (without `-z` it is `old -> new`).
 2. A file renamed without `git mv` shows as ` D <old>` plus `?? <new>`: treat it as a deletion of the old path and a creation of the new one. The returned list names both paths.
 3. Both sides are sets of path strings, compared and sorted by code point (not by locale: `sort` and `comm` gave false differences under different locales).
