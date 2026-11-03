@@ -52,6 +52,10 @@ After each of the implementer's turns that ends in changes (the first one and ev
 4. When the `pre-commit` hook fails, send its output to the implementer as one fix round; the implementer fixes the files, you clear the index with `git -C "<worktree>" reset`, and repeat steps 1 to 3.
 5. Merge commit (Prepare): first restore each tracked path of the baseline (a status code other than `??`) with `git -C "<worktree>" restore --worktree -- <path>`, because an uncommitted lockfile blocks the merge ("Please commit your changes or stash them"). Then run `git -C "<worktree>" merge origin/<default>`. On a conflict the implementer, as one fix round (with none left the ticket is `blocked` with the reason "merge conflict, no fix round left"), resolves the markers in the conflicted files only and runs no git; you `git add` the resolved paths and finish with `git commit --no-edit`. In a merge state skip step 1: the status then lists the upstream paths. After the merge (and the conflict wrap-up) run the adapter's `install` again and record the baseline again.
 
+## A worker's refusal or error
+
+When a worker reports a permission refusal or an error, write its text word for word in the ledger and the report, without summarizing it. In one complete real run (2026-11-03) a compound command was refused whole by a deny rule, and the summary "git status refused" misled the operator.
+
 ## Heads of a PR
 
 The reviewed head is the SHA that the last review returning green on both axes covered. The final head is the SHA after Prepare has merged `origin/<default>` and pushed. The `patch-id` comparison uses these two heads. When it differs, the reviewers' worktrees move to the final head and the re-check is done there.
