@@ -12,7 +12,7 @@ Read at preflight. This file is the single source for the `list-tickets` format 
 
 ## list-tickets
 
-The adapter's `list-tickets` command prints one line per open ticket: the ticket number (a `#` before it is fine), then `READY` or `BLOCKED`, then the title, separated by tabs. `BLOCKED` means the ticket has at least one **open** blocker. Preflight runs the command once and refuses the run if any line does not give a number and `READY`/`BLOCKED`.
+The adapter's `list-tickets` command prints one line per open ticket: the ticket number (a `#` before it is fine), then `READY` or `BLOCKED`, then the title, separated by tabs. `BLOCKED` means the ticket has at least one **open** blocker. Preflight runs the command once and refuses the run if any line does not give a number and `READY`/`BLOCKED`. A ticket just created or just relabelled can take some time to show in the list (about 20 seconds measured, 2026-11-05).
 
 Runnable example (bash; lists issues labelled `ready-for-agent`, using GitHub's native issue dependencies, the `blockedBy` field):
 
@@ -28,7 +28,7 @@ The example was run with `gh` 2.103.2; other versions are untested, so check tha
 
 This is the quality baseline for the implementer, whether or not a skill is named.
 
-- Input: a ticket number. The working directory is a prepared git worktree. How the ticket is read is the executor's business: a bridge worker uses the read tool its application provides (`executors/bridge.md`, Reading tickets), a sub-agent uses `gh`.
+- Input: a ticket number. The working directory is a prepared git worktree. How the ticket is read is the executor's business: a bridge or cli worker uses the read tool its application provides (`executors/bridge.md`, Reading tickets; `executors/cli.md`), a sub-agent uses `gh`.
 - Before starting: read the ticket and state its title; read the project's `GLOSSARY.md`, ADRs, coding-standards documents and the like where they exist, and skip them where they do not. If a skill named `tdd` is installed and the worker can call it, call it for the work below; otherwise follow the next list.
 - Must (when working from the contract):
   1. Test first, one vertical slice at a time, at the seams the orchestrator names. Write a test that fails and keep its raw failing output; then write the least code that passes. Do not write all the tests first.
@@ -38,7 +38,7 @@ This is the quality baseline for the implementer, whether or not a skill is name
   5. Leave the changes in the worktree, uncommitted.
 - Must not: push, open a PR, `git add`, commit, touch a path in `forbidden-files`, refactor in this loop (that is left to the review phase), or run its own two-axis review (independent review is the orchestrator's job).
 - Questions: on an ambiguity (a ticket reference or a requirement is unclear) the worker guesses nothing and writes no file; its final reply for the turn is `QUESTION: <one question>`. The orchestrator answers from the Spec (`SKILL.md`, Decisions for workers) or marks the ticket `blocked`; the answer goes to the same implementer through the executor's follow-up message, and the worker continues in the same context. Answering is not a fix round. A ticket allows 3 questions; the fourth marks it `blocked` with the reason. A `QUESTION` is for an ambiguity with no Spec basis; the Decisions in the return are small decisions already made with a Spec basis. Seen on 2026-11-01 with a Claude sub-agent and a Codex sub-agent (Codex: `harness/codex.md`).
-- Must return: the ticket title and acceptance criteria it read; the list of changed paths, one per line, cumulative (every path it has changed since the last commit, repeating paths from an earlier uncommitted turn); the Decisions it made; the raw failing and passing test output and the check output; for each acceptance criterion, its evidence (a test name or command output), and an explicit "no evidence" where there is none; what it could not verify.
+- Must return: the ticket title and acceptance criteria it read; the list of changed paths, one per line, as plain relative paths (no links, no absolute paths), cumulative (every path it has changed since the last commit, repeating paths from an earlier uncommitted turn); the Decisions it made; the raw failing and passing test output and the check output; for each acceptance criterion, its evidence (a test name or command output), and an explicit "no evidence" where there is none; what it could not verify.
 - Done when: every acceptance criterion has evidence or an explicit "no evidence", and the changed files sit in the worktree and match the returned list; or the turn ends in a `QUESTION`.
 
 ## The orchestrator's commit
@@ -46,7 +46,7 @@ This is the quality baseline for the implementer, whether or not a skill is name
 After each of the implementer's turns that ends in changes (the first one and every fix round) the orchestrator commits them. The commit is the hand-over object: reviewers, `patch-id`, `ready to merge` and the PR work from it.
 
 0. When a worktree is created and `install` has finished, record its changed paths once as the baseline (`install` may change a lockfile): `reference/path-check.md`. Record `git -C "<worktree>" rev-parse HEAD` as well, and again after each commit.
-1. First check that `git -C "<worktree>" rev-parse HEAD` equals the recorded value; a different value means the worker committed by itself, which is an unexpected change (`executors/bridge.md`, Workers without a sandbox). Then drop from the returned list the forbidden paths that step 2 has already restored or deleted. Then compare the worktree's changed paths with the list as `reference/path-check.md` says. A path in only one of them goes back to the implementer as one question. This mechanical question is not a fix round and does not count toward the 3-question limit.
+1. First check that `git -C "<worktree>" rev-parse HEAD` equals the recorded value; a different value means the worker committed by itself, which is an unexpected change (`reference/unsandboxed-workers.md`). Then drop from the returned list the forbidden paths that step 2 has already restored or deleted. Then compare the worktree's changed paths with the list as `reference/path-check.md` says. A path in only one of them goes back to the implementer as one question. This mechanical question is not a fix round and does not count toward the 3-question limit.
 2. Stage path by path: `git -C "<worktree>" add -- <path>` for each listed path that does not match `forbidden-files` (in PowerShell 5.1 a path with spaces needs quotes; not tested). A listed forbidden path is not staged, and it is named in the PR and the report; the PR uses `Refs #N`. Undo the worker's change without `git add`: a path that git tracks (`git -C "<worktree>" ls-files --error-unmatch -- <path>` succeeds) is restored with `git -C "<worktree>" restore --worktree -- <path>`; an untracked, newly created path is deleted with `git -C "<worktree>" clean -f -- <path>`; a path that is also in the baseline (for example a lockfile that `install` changed) is left as it is. Restoring or deleting is not editing a forbidden path.
 3. Commit with the message `<ticket title> (#N)` and the machine's configured git identity. A fix round makes a new commit.
 4. When the `pre-commit` hook fails, send its output to the implementer as one fix round; the implementer fixes the files, you clear the index with `git -C "<worktree>" reset`, and repeat steps 1 to 3.
@@ -62,7 +62,7 @@ The reviewed head is the SHA that the last review returning green on both axes c
 
 ## The preflight probe file
 
-The probe worker writes `probe.txt` with the single line `probe` in the probe worktree and replies when done. The orchestrator checks that the file exists, stages and commits it (`SKILL.md`, preflight step 2). Send the probe worker's commands one at a time. Checking the git remote or `gh auth` is a preflight check of the orchestrator itself (`SKILL.md`, preflight step 2), not a task for the worker.
+The probe worker writes `probe.txt` with the single line `probe` in the probe worktree and replies when done. A byte-order mark at the start of the file (Codex writes one) does not affect the pass. The orchestrator checks that the file exists, stages and commits it (`SKILL.md`, preflight step 2). Send the probe worker's commands one at a time. Checking the git remote or `gh auth` is a preflight check of the orchestrator itself (`SKILL.md`, preflight step 2), not a task for the worker.
 
 ## A rule that changes during a run
 

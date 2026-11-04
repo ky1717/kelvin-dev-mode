@@ -1,6 +1,6 @@
 # Harness notes: Codex
 
-Read when the orchestrator is a Codex session. The facts come in three kinds, and each section names its source: an interactive run, small toy tests, and Codex's own statement (untested; nobody here has checked it). Nothing here shows that an unattended Codex run works.
+Read when the orchestrator is a Codex session, or a Claude session starts Codex workers through the `cli` executor. The facts come in three kinds, and each section names its source: an interactive run, small toy tests, and Codex's own statement (untested; nobody here has checked it). Nothing here shows that an unattended Codex run works.
 
 | Verb in the skill | In Codex |
 |---|---|
@@ -14,6 +14,7 @@ Read when the orchestrator is a Codex session. The facts come in three kinds, an
 | List workers | `collaboration.list_agents` (name seen in the toy test below). |
 | Interrupt | `collaboration.interrupt_agent`: ends the agent's current turn only (toy test below). |
 | Close worker | No such action exists (toy test below): see `executors/subagent.md` (Limits). |
+| Start worker, send task and close worker with the `cli` executor | `codex.exe exec`, `codex.exe exec resume`, `taskkill`: the section "Command-line route" below. |
 
 ## Observed (one run, 2026-11-01)
 
@@ -55,7 +56,7 @@ Source: two probe tasks created through a bridge and two created by hand in the 
 - In that task the main repository's `.git` is read-only: `git add` in a worktree failed with `index.lock: Permission denied` under `.git/worktrees/<name>/`, in both bridge-created tasks.
 - A task that a person creates by hand in the Codex Desktop window can run `danger-full-access`.
 - Consequence for this skill: workers do not commit; the orchestrator does (`reference/contracts.md`, The orchestrator's commit).
-- Not measured: whether tests that write temporary files also need an elevated-permission request. One session reported it; the cause was not isolated.
+- In a restricted thread that a bridge creates (approval `on-request`, sandbox `workspace-write`), tests that write the system temporary directory request elevated permission: 8 of the 13 requests in one real use (2026-11-02 to 11-04). Commands that use the network (`npm view`, `npm install`) also requested it (2 of 13); the other three were `git config`, `git status` and `gh issue view`. Type check, lint, prettier, `npm test` and `playwright --list` made no request. The counts are requests recorded in the log, not clicks of a person.
 
 ## Observed (one overnight run, Codex as worker, 2026-11-01)
 
@@ -66,16 +67,45 @@ Source: one overnight run in a real project; the bridge's receipt timestamps and
 - One CI round took about 9 to 12 minutes.
 - The deploy to staging was still running after 11 to 14 minutes in at least some observations.
 
-## Command-line route (`codex exec`)
+## Command-line route (`codex exec`, the `cli` executor)
 
-Tested on 2026-11-01 on Windows with codex-cli 0.166.0-alpha.5.1; one test, not a guarantee.
+Source: one test on 2026-11-01 (`workspace-write`), and tests on 2026-11-04 and 2026-11-05 in a throw-away toy repository and a small Node project; Windows, codex-cli 0.166.0-alpha.5.1. Each item says "tested" or "not tested". The whole dev-mode flow has not been run through this route.
 
-- Call: `codex exec --json --skip-git-repo-check --model <id> -c model_reasoning_effort="<level>" -s workspace-write -c approval_policy="never" -C <dir> -` (the prompt arrives on standard input through the final `-`). Take `<id>` from the local `~/.codex/models_cache.json`, not from documents that name older models.
-- `codex exec resume <thread id> --json ... -` returns to the same session, which remembered its earlier context; the QUESTION-and-answer flow works through it.
-- Three workers in parallel finished in about 22 seconds, and memory peaked at about 1.9 GB in total. One minimal worker used about 0.6 GB. Codex Desktop alone used about 5.6 GB. This is one observation; summed working sets count shared memory more than once, so only the order of magnitude counts.
-- The GitHub connector still worked (a ticket was read) while the Codex Desktop process was completely stopped. Putting `--disable apps --disable plugins` in the start arguments removes the connector.
-- A command-line session does not appear in the Codex Desktop task list.
-- Closing the Codex Desktop window does not stop its processes (110 stayed until they were killed).
+- **The program (tested).** `codex.exe` sits in a folder `OpenAI/Codex/bin/<hash>/` under the user's local application data (`%LOCALAPPDATA%`), not on `PATH`; the hash changes with updates, so a recorded path goes stale. Selection: list the folders under `bin/`, keep those that contain `codex.exe`, run `codex --version` with each, and take the one whose `codex.exe` was modified last among those that run. The preflight screen shows the path and the version; with no working `codex.exe`, the run refuses. (The review of 2026-11-05 found three hash folders on the test machine, one with `codex.exe`.) An update during a run: not tested.
+- **Start (tested).** `codex.exe exec --json --skip-git-repo-check --model <id> -c approval_policy=never -s <danger-full-access or read-only> -C <worktree> -o <result file> -`. The final `-` reads the prompt from standard input.
+  - To set a reasoning level add `-c model_reasoning_effort=<level>`; the `cli` executor sets none.
+  - With `models` unset, leave out `--model <id>` on start and on resume.
+  - A prompt of 74,862 characters with Chinese text went through standard input and worked (UTF-8 without a byte-order mark). Windows limits a command line to about 32,767 characters, so a long prompt always goes through standard input.
+  - Take the model id from the local `~/.codex/models_cache.json`, not from documents that name older models.
+- **Result and events (tested).** The `-o` file holds the final message. The JSON event output on standard output has a `thread.started` event that carries `thread_id`. The simplest task took about 12 seconds. A killed process leaves no `-o` file; its event output keeps what was written (the `thread_id` is in it) and the exit code is not 0.
+- **Resume (tested).** `codex.exe exec resume <thread_id> --json --skip-git-repo-check --model <id> -c approval_policy=never -c sandbox_mode=<danger-full-access or read-only> -o <result file> -`, started with the worktree as its working directory, returns to the same session, which remembered its earlier context; the QUESTION-and-answer flow works through it.
+  - Permissions: `exec resume` has no `-s` option, and a resumed session does not keep full access. Without `-c sandbox_mode=...` it falls back to the restricted mode (a write outside the working directory failed; with the option it succeeded). So pass it on every resume.
+  - Working directory: `exec resume` has no `-C`. Started from another folder, it still finds the session by its id (tested), but the worker's commands run in the folder where the resume process was started, not in the session's old directory (tested: a working-directory query gave the worktree on the first turn and the other folder after a resume from there).
+  - `--all` is listed in `exec resume --help` ("disables cwd filtering"); what it changes was not tested, and the lookup by id from another folder worked without it.
+  - `--model` and `--skip-git-repo-check` are listed in `exec resume --help`; they were not tested on a resume by themselves.
+- **Read-only reviewer (tested, 2026-11-05).** Start with `-s read-only` instead of `-s danger-full-access`: reading files and `git log` work, creating a file is refused (access denied), and `git status` works but prints one warning about a global ignore file. A resume with `-c sandbox_mode=read-only` refused the file creation as well.
+- **Stop (tested).** `taskkill /PID <pid> /T /F` killed 7 direct children and 18 descendants and left 0. Started from a Claude Code background task, `TaskStop` also cleaned up and the end was notified.
+- **Process identity (not tested).** A process is named by its id and its start time; read the start time in PowerShell with `(Get-Process -Id <pid>).StartTime`. A recorded id whose start time differs belongs to another program: do not kill it.
+- **Stuck detection (tested as an observation).** Watch whether the event file grows. A legitimate 150-second command left it unchanged for 40 seconds, so the stuck time must be generous and is judged together with other side effects (`SKILL.md`, Tick step 3).
+- **Parallel and a real project (tested).** Three workers, each in its own worktree, finished in 33 seconds with a total memory peak of about 1.95 GB, and the main checkout stayed clean (the first test, 2026-11-01: about 22 seconds and 1.9 GB). One minimal worker used about 0.6 GB; Codex Desktop alone used about 5.6 GB. Summed working sets count shared memory more than once, so only the order of magnitude counts. In a small Node project with full access, a worker installed a test runner over the network, wrote code and tests, and `npm test` passed, in 36 seconds.
+- **Connector and Desktop (tested, 2026-11-01).** The GitHub connector still worked (a ticket was read) while the Codex Desktop process was completely stopped. Putting `--disable apps --disable plugins` in the start arguments removes the connector. A command-line session does not appear in the Codex Desktop task list, and closing the Desktop window does not stop its processes (110 stayed until they were killed).
+- **Reading tickets (two spellings of the connector's tool).** In the logs of Codex Desktop threads (a `custom_tool_call`, 82 session records) the tool is `mcp__codex_apps__github_fetch_issue`, with the parameters `issue_number` (a number) and `repository_full_name` (`owner/repo`). In the event log of a `codex exec` process (the real trial run of 2026-11-05) the call reads `server: codex_apps, tool: github.fetch_issue`, and the read succeeded there. Which parameters that log shows was not checked.
+- **Environment (tested, 2026-11-05, reads only).** The orchestrator sets a placeholder for `GH_TOKEN` and points `GH_CONFIG_DIR` at an empty folder when it starts the process; the worker sees the placeholders. Three results on the test machine, with `git ls-remote` of a private repository:
+  - In the default environment it succeeded (the stored login was used).
+  - With the two settings above it was refused ("Invalid username or token"): the machine's git credential helper takes the token from `gh`, and the placeholder closes that entry.
+  - `GIT_CONFIG_GLOBAL` pointing at an empty file, `GIT_CONFIG_NOSYSTEM=1` and `GCM_INTERACTIVE=never` did not close it by themselves; all of them together with the two settings were refused as well.
+  - Not tested: pushes, and any other credential helper (for example Git Credential Manager used alone). So this is a guard, and the orchestrator's check stays the authority.
+- **Command rules (tested, not used by default).** `forbidden` prefixes in `$CODEX_HOME/rules/*.rules` work under `exec`, but `git -C . push` and `cmd /c git push` get around them (and really pushed to a local bare repository). They are a weak guard. They are read from `CODEX_HOME`, so using them needs an isolated `CODEX_HOME` with a copy of the login file, and a copy of the login file is a risk of leaking it. The default is no rules file and no copy.
+- **Windows PowerShell 5.1 (tested).** Two ways to start the process with the prompt on standard input worked: `ProcessStartInfo` (tested in the toy tests) and `Start-Process` with `-RedirectStandardInput` (used in the real run of 2026-11-05). `ProcessStartInfo` has no `ArgumentList`, so build the `Arguments` string. A script file with Chinese text is read wrongly (version 5.1 reads a file without a byte-order mark as ANSI), so build such text from character codes. A `Register-ObjectEvent` or `add_OutputDataReceived` script block on a background thread crashes the process; poll the output file instead.
+- **Own worktree options (not used).** `codex exec --worktree` and `claude -w` can create a worktree of their own; the skill creates its worktrees itself and uses neither.
+- **A sandboxed alternative (tested, not the default).** `-s workspace-write` with `approval_policy=never`: node, `git status`, `git diff` and file writes work. It needs:
+  - npm: `NPM_CONFIG_CACHE` pointed at a writable folder.
+  - git: `safe.directory` set through `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0` and `GIT_CONFIG_VALUE_0`.
+  - the temporary directory: `TEMP` and `TMP` pointed at a writable folder that is added as a writable root with `-c sandbox_workspace_write.writable_roots=[...]`.
+  - Python installed under the user's folder: not visible in the sandbox by default; add its folder as a writable root.
+  - A temporary folder that the worker made with Python's `mkdtemp` inside the sandbox cannot be deleted by the orchestrator's account (it needs an administrator).
+  - The option `--add-dir` (extra writable directories, in the help text) was not tested.
+- **Not tested:** the whole dev-mode flow through this route; choosing the program from the settings of a Claude Code orchestrator; whether a `codex exec` process can start sub-agents (this matters for the reviewer design); the orchestrator's own kill timer; the program being updated during a run.
 
 ## Writing `.git` from a Codex worker (command-line route, 2026-11-01, Windows)
 
@@ -88,7 +118,7 @@ Setup: `-s workspace-write` with `approval_policy="never"`.
 | an independent clone (its own `.git` is inside the workspace) | fails with the same error |
 
 - With the worktree's git directory plus the shared `objects`, `refs` and `logs` added as writable roots, `git add` and `git commit` succeed; the worker can then change shared branches and object data, so this is not recommended.
-- `-s danger-full-access` succeeds; not recommended.
+- `-s danger-full-access` succeeds. It is the default of the `cli` executor, which relies on the orchestrator's check and on branch protection (`reference/unsandboxed-workers.md`).
 - Cause: git keeps a worktree's index under the main repository's `.git/worktrees/<name>/`, which the Codex sandbox protects. This is why workers do not commit (`reference/contracts.md`, The orchestrator's commit).
 - A Windows gotcha: under `-s workspace-write`, even creating a file in a directory under an 8.3 short path (a name containing `~1`) was refused; the same work under a normal long path succeeded.
 

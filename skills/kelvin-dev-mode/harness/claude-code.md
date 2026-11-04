@@ -16,13 +16,27 @@ Read when the orchestrator is a Claude Code session (or a Claude Code worker is 
 
 A skill that can only be started by a user (`disable-model-invocation: true`, as Matt's `implement` has) is a user-only skill. A sandbox run of the `subagent` executor found the implementer, whose prompt the orchestrator wrote, unable to start it. Such a role follows the three steps in `reference/contracts.md`. Whether a Claude sub-agent can read a user-only skill's file and follow it was not tested (it waits for a sandbox run); the sandbox run that found the limit used the contract only. The `bridge` executor, whose workers receive the call as a user message, did not hit this in the one overnight run.
 
+## Wake-up and starting a run
+
+A wake-up tool counts when the prompt it schedules is run again in this session as a new turn. In an interactive session started by the plain slash command, `ScheduleWakeup` counts: the description of the tool names `/loop` as its main use, and that is not a limit.
+
+Evidence: four interactive sessions started by the plain slash command (2026-10-30 to 2026-11-05, session records read) called `ScheduleWakeup` with the prompt `/kelvin-dev-mode`, from 15 to 80 calls per session. When the time came, the session received `/kelvin-dev-mode` as a new message and re-entered the skill. Not tested: whether a wake-up fires after a headless `claude -p` process has ended; two rounds run with `claude -p` finished inside one turn by blocking waits and never needed one.
+
+In a headless session treat the wake-up as absent, although the tool may be listed: say so on the preflight screen and run the round inside one turn with blocking waits. A night with the current version has not been run.
+
+This skill is user-only (`disable-model-invocation: true`), so the Skill tool refuses it (the refusal in the real run of 2026-11-05: "Skill kelvin-dev-mode cannot be used with Skill tool due to disable-model-invocation"). The start with evidence for a night is an interactive session in which the user types the slash command. `claude -p "/kelvin-dev-mode"` starts a round (two rounds ran to the end, 2026-11-05), but a scheduled `claude -p` for a night is untested for the wake-up.
+
 ## Bridge tools for Codex workers
+
+A Claude orchestrator can also start Codex workers as command-line processes (`executors/cli.md`): no bridge tool is involved, the shell tool starts the Codex program, and the commands are in `harness/codex.md`, section "Command-line route". The bridge below is the other route.
 
 Source: the tool descriptions of the bridge used in testing, read on 2026-11-01. These are interface facts, not measurements; the earlier overnight run used this direction (a Claude orchestrator with Codex workers) under an earlier version of this skill, and the whole flow of the current version has not run overnight.
 
 A Claude orchestrator reaches Codex workers through the bridge used in testing (`executors/bridge.md` has the protocol). Per action: start worker, `start_codex_thread`; send task, `send_to_codex_thread`; read result, `read_bridge_message`, `list_unread_results` and `acknowledge_bridge_message` (`read_codex_delivery` reads a receipt); query status, `list_codex_threads` and `read_codex_thread`. There is no close action: `interrupt_codex_turn` ends one turn, and `stop_codex_app_server` ends every worker, so it is not one worker's close.
 
 From the session record of a practice preflight (2026-11-03; not tested by us): a deny rule matches per sub-command, so a compound command in which one part matches is refused whole, while a single `python -m unittest` succeeded.
+
+Before `git worktree remove` on Windows, leave the worktree's directory: with the shell's current directory inside the worktree, the removal failed with Permission denied and the directory stayed (real run, 2026-11-05).
 
 On Windows Claude Code has a Bash tool and a PowerShell tool, so a deny list names each command in both families. Tested: an allowlist with Bash entries only was refused until the PowerShell entries were added; a PowerShell deny entry was not tested.
 
