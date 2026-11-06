@@ -10,6 +10,8 @@ Every state change appends one comment: ticket, state (exactly one of `queued`, 
 
 Only you write it; read the clock before you write the UTC time, never an estimate; append before acting. The newest comment per ticket is its state, so a new session resumes from the ledger alone. Name tickets and PRs the way the instruction file asks.
 
+A comment that is posted is not edited. A correction is a new comment.
+
 A fact that exists only after an action (a session id, a process id, a PR number, a head SHA) goes in the comment right after the action. The comment before the action says "before start" (or "before push") in place of that fact.
 
 A question that you answer for the operator goes in the ticket's next state comment as `(question N of 3 answered: <one sentence>)`. It adds no state value.
